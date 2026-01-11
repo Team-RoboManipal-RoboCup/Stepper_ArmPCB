@@ -263,81 +263,25 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
- int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
+static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
-  /* USER CODE BEGIN 6 */
-	/*char temp[32] = {0};
-	 memcpy(temp, Buf, *Len);  // Copy data to our buffer
-	    temp[*Len] = '\0';        // Null-terminate the string
+    uint32_t len = *Len;
 
-	    received_angle_deg = atof(temp);  // Convert to float
-	    char msg[32];
-	    sprintf(msg, "Target set to: %.2f\r\n", received_angle_deg);
-	    CDC_Transmit_FS((uint8_t*)msg, strlen(msg));
-	    CDC_Transmit_FS((uint8_t*)"Angle Received\r\n", 16);
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);*/
+    if (len > USB_RX_BUFFER_SIZE)
+        len = USB_RX_BUFFER_SIZE;   // hard cap
 
- /* char tmp[32];
-     uint32_t len = (*Len < sizeof(tmp)-1) ? *Len : (sizeof(tmp)-1);
-     memcpy(tmp, Buf, len);
-     tmp[len] = '\0';
+    memcpy(usb_rx_buffer, Buf, len);
+    usb_rx_length = len;
+    usb_rx_flag = 1;
 
-     // trim leading spaces
-     char *p = tmp;
-     while (*p == ' ' || *p == '\t') p++;
+    // Re-arm USB reception
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
 
-     // accept "ANGLE:123" or just "123"
-     if (strncmp(p, "ANGLE:", 6) == 0 || strncmp(p, "angle:", 6) == 0) {
-         p += 6;
-         while (*p == ' ' || *p == '\t') p++;
-     }
-
-     // parse integer safely (base 10)
-     char *endptr = NULL;
-     long val = strtol(p, &endptr, 10);
-
-     // ensure we actually parsed digits
-     if (endptr == p) {
-         // no digits found — optional: ack bad format
-         const char *err = "Bad format\r\n";
-         CDC_Transmit_FS((uint8_t*)err, (uint16_t)strlen(err));
-     } else {
-         // clamp valid range 0..359
-         if (val < 0) val = 0;
-         if (val > 359) val = 359;
-         received_angle_deg = (int)val;
-
-         // acknowledge
-         char ack[32];
-         int n = snprintf(ack, sizeof(ack), "Angle set: %d\r\n", received_angle_deg);
-         CDC_Transmit_FS((uint8_t*)ack, (uint16_t)n);
-     }*/
-	/* Buf[*Len] = '\0';  // Null-terminate the received string
-
-	    int angle = 0;
-	    if (sscanf((char*)Buf, "ANGLE:%d", &angle) == 1) {
-	        received_angle_deg = angle;
-	        char reply[32];
-	        sprintf(reply, "Angle set: %d\r\n", received_angle_deg);
-	        CDC_Transmit_FS((uint8_t*)reply, strlen(reply));
-	    } else {
-	        CDC_Transmit_FS((uint8_t*)"Invalid command\r\n", 17);
-	    }*/
-	 if (*Len > USB_RX_BUFFER_SIZE - 1)
-	        *Len = USB_RX_BUFFER_SIZE - 1;  // prevent overflow
-	 memcpy(usb_rx_buffer, Buf, *Len);
-	    usb_rx_buffer[*Len] = '\0';  // null terminate string
-	    usb_rx_length = *Len;
-	       usb_rx_flag = 1;
-	    // Try to parse a number from the buffer
-
-
-     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-        USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  return (USBD_OK);
-  /* USER CODE END 6 */
+    return USBD_OK;
 }
+  /* USER CODE END 6 */
+
 
 /**
   * @brief  CDC_Transmit_FS

@@ -36,7 +36,7 @@ extern uint8_t usb_rx_buffer[];
 extern volatile uint32_t usb_rx_length;
 extern volatile uint8_t usb_rx_flag;
 
-int received_angle_deg = 0;
+
 // ---- Function prototypes ----
 void Stepper_Step(uint16_t steps, GPIO_PinState dir);
 void Stepper_GeneratePulse(void);
@@ -44,6 +44,13 @@ void Stepper_GeneratePulse(void);
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef enum {
+    CMD_UNKNOWN = 0,
+    CMD_PING,
+    CMD_SET_POS,
+    CMD_GET_POS,
+    CMD_GET_POS_ANGLE
+} usb_cmd_t;
 
 /* USER CODE END PTD */
 
@@ -69,6 +76,11 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM2_Init(void);
+
+char buffer[32];
+float angle = 0.0f;
+static uint8_t fail_count = 0;
+int received_angle_deg = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,33 +94,6 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/*void Stepper_Step(uint16_t steps, GPIO_PinState dir)
-{
-    HAL_GPIO_WritePin(DIR_PORT, DIR_PIN, dir);
-
-    for (uint16_t i = 0; i < steps; i++)
-    {
-        Stepper_GeneratePulse();
-        HAL_Delay(1);
-    }
-}
-
-// Generate one step pulse using PWM pin
-void Stepper_GeneratePulse(void)
-{
-    // Manually toggle the STEP pin (if not using PWM)
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);  // assuming PA0 = STEP pin
-    HAL_Delay(1000);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-	 //HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-}*/
-/* USER CODE BEGIN 0 */
-/*void Step_Pulse(GPIO_TypeDef *port, uint16_t pin, uint32_t pulse_delay_us) {
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
-    delay_us(pulse_delay_us);
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
-
-}*/
 
 
 
@@ -131,6 +116,87 @@ void Stepper_SetupConfig(void) {
 
     stepper_cfg.target_angle_deg = 90.0f;    // Target position (initially 90°)
 }
+
+static inline void usb_ok(void) {
+    CDC_Transmit_FS((uint8_t*)"OK\r\n", 4);
+}
+
+static inline void usb_err(const char *err) {
+    CDC_Transmit_FS((uint8_t*)err, strlen(err));
+}
+
+usb_cmd_t parse_usb_command(uint8_t *data, uint32_t len)
+{
+    char cmd[32];
+    uint32_t i = 0;
+
+    if (len == 0 || len >= sizeof(cmd))
+        return CMD_UNKNOWN;
+
+    /* Copy only command token (stop at space / CR / LF) EG: for something entered like SET_POS 80, it parses till blank */
+    while (i < len && data[i] != ' ' && data[i] != '\r' && data[i] != '\n')
+    {
+        cmd[i] = data[i];
+        i++;
+    }
+    cmd[i] = '\0';
+
+    if (!strcmp(cmd, "PING")) return CMD_PING;
+    if (!strcmp(cmd, "SET_POS")) return CMD_SET_POS;
+    if (!strcmp(cmd, "GET_POS")) return CMD_GET_POS;
+    if (!strcmp(cmd, "GET_POS_ANGLE")) return CMD_GET_POS_ANGLE;
+
+    return CMD_UNKNOWN;
+}
+
+void USB_Command_Handle(uint8_t *data, uint32_t len)
+{
+    usb_cmd_t cmd = parse_usb_command(data, len);
+    char *p = (char *)data;
+
+    switch (cmd)
+    {
+    case CMD_PING:
+    	usb_ok();
+        break;
+
+    case CMD_SET_POS:
+    {
+        while (*p && *p != ' ') { p++; }
+        if (!*p) { usb_err("ERR ARG\r\n"); break; }
+        p++;
+
+        int angle = atoi(p);
+        if (angle < 0 || angle > 300) {
+            usb_err("ERR RANGE\r\n");
+            break;
+        }
+
+        received_angle_deg=angle;
+          // Combine text + value into one single message
+          char msg[32];
+          sprintf(msg, " Value recieved: %d\r\n", angle);
+
+          // Send in one go (prevents empty lines)
+          CDC_Transmit_FS((uint8_t*)msg, strlen(msg));
+          usb_ok();
+        break;
+    }
+    case CMD_GET_POS:
+    case CMD_GET_POS_ANGLE:
+    {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "%.3f\r\n", angle);
+        CDC_Transmit_FS((uint8_t *)msg, strlen(msg));
+        break;
+    }
+
+    default:
+        usb_err("ERR CMD\r\n");
+        break;
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -167,17 +233,15 @@ int main(void)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-  char buffer[32];
- float angle = 0.0f;
- static uint8_t fail_count = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
  //char usb_rx_buffer[64];
  //float received_angle_deg = 0;
   Stepper_SetupConfig();
-   Stepper_Init(&stepper_cfg, &stepper_state);
+  Stepper_Init(&stepper_cfg, &stepper_state);
 
-   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -190,10 +254,10 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  // Read angle from AS5600
 	  	  if (AS5600_ReadAngle_deg(&hi2c1, &angle) == HAL_OK)
-	  	      {
+	  	   {
 	  	          //Stepper_SetTarget(&stepper_cfg, angle);
-	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-	  	   fail_count = 0;
+	  		  	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+	  		  	  fail_count = 0;
 
 	  	          stepper_cfg.target_angle_deg = (float)received_angle_deg;     // follow magnet
 	  	          Stepper_Update(&stepper_cfg, &stepper_state);
@@ -202,28 +266,7 @@ int main(void)
 	  	           // Convert to integer (no decimals)
 	  	           int int_angle = (int)angle;
 
-	  	           // Combine text + value into one single message
-	  	           char msg[32];
-	  	           sprintf(msg, "Sensor Value: %d\r\n", int_angle);
 
-	  	           // Send in one go (prevents empty lines)
-	  	           CDC_Transmit_FS((uint8_t*)msg, strlen(msg));
-
-	  	           //HAL_Delay(20); // allow USB CDC time to finish transfer
-	  	      /* CDC_Transmit_FS((uint8_t*)"Sensor Value\r\n", 14);
-
-	  	      /* int int_angle = (int)angle;
-	  	      char temp[8];
-	  	      itoa(int_angle, temp, 10); // base 10 conversion
-	  	      CDC_Transmit_FS((uint8_t*)temp, strlen(temp));
-	  	      CDC_Transmit_FS((uint8_t*)"\r\n", 2); // optional newline*/
-
-	  	       /* sprintf(buffer, "%.2f\r\n", angle); // @suppress("Float formatting support")
-
-	  	               // Transmit string over USB CDC
-	  	        HAL_Delay(5);
-
-	  	               CDC_Transmit_FS((uint8_t*)buffer, strlen(buffer));*/
 
 	  	      }
 	  	else
@@ -241,73 +284,11 @@ int main(void)
 
 	  	 if (usb_rx_flag)
 	  	    {
-	  	        usb_rx_flag = 0;  // clear flag after processing
-
-	  	        int val;
-
-	  	        // ✅ Try parsing integer
-	  	        if (sscanf((char*)usb_rx_buffer, "%d", &val) == 1)
-	  	        {
-	  	            received_angle_deg = val;
-
-	  	            char msg[64];
-	  	            sprintf(msg, "Angle set: %d\r\n", received_angle_deg);
-	  	            CDC_Transmit_FS((uint8_t*)msg, strlen(msg));
-	  	        }
-	  	        else
-	  	        {
-	  	            CDC_Transmit_FS((uint8_t*)"Invalid input\r\n", 15);
-	  	        }
+	  		 usb_rx_flag = 0;       // clear immediately
+	  		 USB_Command_Handle(usb_rx_buffer, usb_rx_length);
+	  		 usb_rx_length = 0;
 	  	    }
-	  	//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-	  	//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-	  	//delay_us(10);
-	  	//HAL_Delay(2);// IN1 = 1
-	  	        //-;pHAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET); // IN2 = 0
 
-	  	/* HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
-	  		 // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);  // DIR = 0 (CW)
-	  		 	        for (int i = 0; i < 2000; i++) {
-	  		 	            Step_Pulse(GPIOA, GPIO_PIN_0, 5000);
-	  		 	            HAL_Delay(1);// 500 µs high, 500 µs low
-	  		 	        }
-	  		 	       HAL_Delay(1000); // wait 1s
-	  		 	       HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
-	  		 	        // 🔄 Anticlockwise rotation
-	  		 	        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);   // DIR = 1 (CCW)
-	  		 	        for (int i = 0; i < 2000; i++) {
-	  		 	            Step_Pulse(GPIOA, GPIO_PIN_0, 5000);
-	  		 	            HAL_Delay(1);
-	  		 	        }
-	  		 	        HAL_Delay(1000);
-	  		   }*/
-
-	  	     // HAL_Delay(1); /// small delay to avoid overloading I2C
-	  	  // Rotate 90° clockwise (50 steps)
-	  	       /* Stepper_Step(50, GPIO_PIN_SET);
-	  	         HAL_Delay(1000); // wait 1 second
-
-	  	         // Rotate 90° counterclockwise (50 steps)
-	  	         Stepper_Step(50, GPIO_PIN_RESET);
-	  	         HAL_Delay(1000);*/
-
-
-	  		       // Example: change target angle every few seconds
-	  		       /*static uint32_t last_change = 0;
-	  		       if (HAL_GetTick() - last_change > 5000) {
-	  		           last_change = HAL_GetTick();
-	  		           stepper_cfg.target_angle_deg += 90.0f;
-	  		           if (stepper_cfg.target_angle_deg >= 360.0f)
-	  		               stepper_cfg.target_angle_deg = 0.0f;*/
-
-
-	  		  //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
-	  		  //float angle;
-	  		       /*  if (AS5600_ReadAngle_deg(&hi2c1, &angle) == HAL_OK) {
-	  		        	volatile int int_part = (int)angle;
-	  		        	 int dec_part = (int)((angle - int_part) * 100); // two decimal places
-	  		        	 snprintf(buf, sizeof(buf), "Angle: %d.%02d\r\n", int_part, abs(dec_part));
-	  		             CDC_Transmit_FS((uint8_t*)buf, int_part);}*/
 	   }
 
   /* USER CODE END 3 */
