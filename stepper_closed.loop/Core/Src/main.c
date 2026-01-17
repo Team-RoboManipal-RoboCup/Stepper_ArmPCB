@@ -114,7 +114,7 @@ void Stepper_SetupConfig(void) {
     stepper_cfg.angle_tolerance_deg = 1.0f;  // Stop when within 1 degree
     stepper_cfg.control_interval_ms = 10;    // PID update every 10 ms
 
-    stepper_cfg.target_angle_deg = 90.0f;    // Target position (initially 90°)
+    stepper_cfg.target_angle_deg = 200.0f;    // Target position (initially 90°)
 }
 
 static inline void usb_ok(void) {
@@ -242,6 +242,10 @@ int main(void)
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
+  //angle
+
+  AS5600_ReadAngle_deg(&hi2c1, &stepper_cfg.target_angle_deg);
+  received_angle_deg=stepper_cfg.target_angle_deg;
 
   /* USER CODE END 2 */
 
