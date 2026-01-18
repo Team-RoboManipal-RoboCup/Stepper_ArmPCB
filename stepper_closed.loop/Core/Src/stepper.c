@@ -3,10 +3,10 @@
 extern void delay_us(uint32_t us);
 static float normalize_angle_error(float err) {
     // normalize to [-180, +180)
-    while (err > 180.0f)
-    	err -= 360.0f;
-    while (err <= -180.0f)
-    	err += 360.0f;
+//    while (err > 180.0f)
+//    	err -= 360.0f;
+//    while (err <= -180.0f)
+//    	err += 360.0f;
     return err;
 }
 
