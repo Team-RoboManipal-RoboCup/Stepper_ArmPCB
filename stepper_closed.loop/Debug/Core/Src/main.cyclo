@@ -2,7 +2,7 @@
 ../Core/Src/main.c:120:20:usb_ok	1
 ../Core/Src/main.c:124:20:usb_err	1
 ../Core/Src/main.c:128:11:parse_usb_command	11
-../Core/Src/main.c:152:6:USB_Command_Handle	8
+../Core/Src/main.c:152:6:USB_Command_Handle	10
 ../Core/Src/main.c:206:5:main	5
 ../Core/Src/main.c:305:6:SystemClock_Config	4
 ../Core/Src/main.c:352:13:MX_I2C1_Init	2

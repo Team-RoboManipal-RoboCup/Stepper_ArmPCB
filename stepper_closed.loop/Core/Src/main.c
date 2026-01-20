@@ -167,10 +167,10 @@ void USB_Command_Handle(uint8_t *data, uint32_t len)
         p++;
 
         int angle = atoi(p);
-//        if (angle < 0 || angle > 300) {
-//            usb_err("ERR RANGE\r\n");
-//            break;
-//        }
+        if (angle < 5 || angle > 355) {
+            usb_err("ERR RANGE\r\n");
+            break;
+        }
 
         received_angle_deg=angle;
           // Combine text + value into one single message
