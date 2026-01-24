@@ -1,0 +1,13 @@
+../Core/Src/main.c:125:6:Stepper_SetupConfig	1
+../Core/Src/main.c:145:20:usb_ok	1
+../Core/Src/main.c:149:20:usb_err	1
+../Core/Src/main.c:153:11:parse_usb_command	14
+../Core/Src/main.c:186:6:USB_Command_Handle	22
+../Core/Src/main.c:305:5:main	7
+../Core/Src/main.c:416:6:SystemClock_Config	4
+../Core/Src/main.c:463:13:MX_I2C1_Init	2
+../Core/Src/main.c:497:13:MX_TIM2_Init	4
+../Core/Src/main.c:546:13:MX_GPIO_Init	1
+../Core/Src/main.c:595:6:I2C_Reset_Bus	2
+../Core/Src/main.c:633:6:delay_us	2
+../Core/Src/main.c:646:6:Error_Handler	1

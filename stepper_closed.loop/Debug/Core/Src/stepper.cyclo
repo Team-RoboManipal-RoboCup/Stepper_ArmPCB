@@ -1,0 +1,5 @@
+../Core/Src/stepper.c:4:14:normalize_angle_error	1
+../Core/Src/stepper.c:15:17:Stepper_GetTimerClockHz	2
+../Core/Src/stepper.c:30:6:Stepper_Init	2
+../Core/Src/stepper.c:45:6:Stepper_Actuate	10
+../Core/Src/stepper.c:106:19:Stepper_Update	16
